@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # --- Phase 1: MinIO Service ---
+  minio:
+    image: minio/minio:latest
+    container_name: minio_server
+    ports:
+      - "9000:9000"  # API access (Host 9000 -> Container 9000)
+      - "9001:9001"  # Browser Console
+    environment:
+      MINIO_ROOT_USER: "admin"
+      MINIO_ROOT_PASSWORD: "password123"
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio_data:/data
+
+  # --- Phase 3: HDFS Services ---
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - "9870:9870" # HDFS Web UI
+      - "8020:9000" # IPC: Map Host 8020 -> Container 9000
+    environment:
+      - CLUSTER_NAME=test
+      - HDFS_CONF_dfs_permissions_enabled=false
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - ./hdfs_namenode:/hadoop/dfs/name  # <--- Persists NameNode metadata
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode # To avoid the container ID trap
+    restart: always
+    ports:
+      - "9864:9864" # Allows Python's script to write data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - ./hdfs_datanode:/hadoop/dfs/data  # <--- Persists the actual file blocks
